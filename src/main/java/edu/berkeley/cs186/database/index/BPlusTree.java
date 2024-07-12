@@ -9,6 +9,7 @@ import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
+import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.RecordId;
 
 import java.io.FileWriter;
@@ -146,8 +147,8 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): implement
-
-        return Optional.empty();
+        LeafNode leafNode = root.get(key);
+        return leafNode.getKey(key);
     }
 
     /**
@@ -258,6 +259,22 @@ public class BPlusTree {
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
 
+        Optional<Pair<DataBox, Long>> child = root.put(key, rid);
+        if(!child.isPresent()) {
+            return;
+        }
+        List<DataBox> keys1 = new ArrayList<>();
+        List<Long> children1 = new ArrayList<>();
+        keys1.add(child.get().getFirst());
+        if(key.compareTo(keys1.get(0)) >= 0) {
+            children1.add(root.getPage().getPageNum());
+            children1.add(child.get().getSecond());
+        }else {
+            children1.add(child.get().getSecond());
+            children1.add(root.getPage().getPageNum());
+        }
+//        Page page1 = bufferManager.fetchNewPage(lockContext, metadata.getPartNum());
+        this.updateRoot(new InnerNode(metadata, bufferManager, keys1, children1, lockContext));
         return;
     }
 
@@ -309,7 +326,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): implement
-
+        root.remove(key);
         return;
     }
 
