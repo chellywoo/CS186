@@ -193,13 +193,45 @@ class LeafNode extends BPlusNode {
         }
     }
 
+    public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid, int fill) {
+        LeafNode node = this;
+        Optional<Pair<DataBox, Long>> result = Optional.empty();
+        int idx = InnerNode.numLessThan(key, keys);
+        keys.add(idx, key);
+        rids.add(idx, rid);
+        // 如果插入之后，无溢出
+        if (keys.size() <= fill) {
+            sync();
+            return Optional.empty();
+        } else {
+            // 插入后溢出
+            List<DataBox> keys1 = keys.subList(fill, keys.size());
+            List<RecordId> rids1 = rids.subList(fill, rids.size());
+            keys = keys.subList(0, fill);
+            rids = rids.subList(0, fill);
+            Page page1 = bufferManager.fetchNewPage(treeContext, metadata.getPartNum());
+            LeafNode node1 = new LeafNode(metadata, bufferManager, page1, keys1, rids1, rightSibling, treeContext);
+            rightSibling = Optional.of(page1.getPageNum());
+            sync();
+            return Optional.of(new Pair<>(keys1.get(0), page1.getPageNum()));
+        }
+    }
+
     // See BPlusNode.bulkLoad.
     @Override
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        int fill = Math.round(metadata.getOrder() * 2 * fillFactor);
+        LeafNode node = this;
+        Optional<Pair<DataBox, Long>> result = Optional.empty();
+        while (data.hasNext()) {
+            Pair<DataBox, RecordId> pair = data.next();
+            DataBox key = pair.getFirst();
+            RecordId rid = pair.getSecond();
+            result = node.put(key, rid, fill);
+        }
+        return result;
     }
 
     // See BPlusNode.remove.

@@ -11,7 +11,9 @@ import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.RecordId;
+import sun.java2d.xr.GrowableEltArray;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -302,6 +304,32 @@ public class BPlusTree {
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
 
+        int flag = 1;
+        while (data.hasNext()) {
+            List<Pair<DataBox, RecordId>> list = new ArrayList<>();
+            int index = 1;
+            if(flag == 1) {
+                index = 0;
+                flag = 0;
+            }
+            while (index < 2 * metadata.getOrder() && data.hasNext()) {
+                list.add(data.next());
+                index++;
+            }
+//            put(next.getFirst(), next.getSecond(), metadata.getOrder() * 2);
+            Optional<Pair<DataBox, Long>> split = root.bulkLoad(list.iterator(), fillFactor);
+
+            if (split.isPresent()) {
+                List<DataBox> keys1 = new ArrayList<>();
+                List<Long> children1 = new ArrayList<>();
+                keys1.add(split.get().getFirst());
+                children1.add(root.getPage().getPageNum());
+                children1.add(split.get().getSecond());
+
+//        Page page1 = bufferManager.fetchNewPage(lockContext, metadata.getPartNum());
+                this.updateRoot(new InnerNode(metadata, bufferManager, keys1, children1, lockContext));
+            }
+        }
         return;
     }
 
@@ -372,7 +400,7 @@ public class BPlusTree {
 
         // Writing to intermediate dot file
         try {
-            java.io.File file = new java.io.File("tree.dot");
+            File file = new File("tree.dot");
             FileWriter fileWriter = new FileWriter(file);
             fileWriter.write(tree_string);
             fileWriter.flush();
