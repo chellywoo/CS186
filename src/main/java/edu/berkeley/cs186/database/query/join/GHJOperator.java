@@ -71,6 +71,28 @@ public class GHJOperator extends JoinOperator {
         // You may find the implementation in SHJOperator.java to be a good
         // starting point. You can use the static method HashFunc.hashDataBox
         // to get a hash value.
+        for (Record record: records) {
+            // Partition left records on the chosen column
+            DataBox columnValue;
+            if (left)
+                columnValue = record.getValue(getLeftColumnIndex());
+            else
+                columnValue = record.getValue(getRightColumnIndex());
+
+            int hash = HashFunc.hashDataBox(columnValue, pass);
+            // modulo to get which partition to use
+            int partitionNum = hash % partitions.length;
+            if (partitionNum < 0)  // hash might be negative
+                partitionNum += partitions.length;
+//            if(partitions[partitionNum].getNumPages() > this.numBuffers - 2) {
+//                hash = HashFunc.hashDataBox(columnValue, pass + 1);
+//                int partitionNum1 = hash % partitions.length;
+//                if (partitionNum1 < 0)  // hash might be negative
+//                    partitionNum1+= partitions.length;
+//                partitions[partitionNum1].add(record);
+//            } else
+            partitions[partitionNum].add(record);
+        }
         return;
     }
 
@@ -112,6 +134,31 @@ public class GHJOperator extends JoinOperator {
         // You shouldn't refer to any variable starting with "left" or "right"
         // here, use the "build" and "probe" variables we set up for you.
         // Check out how SHJOperator implements this function if you feel stuck.
+        Map<DataBox, List<Record>> map = new HashMap<>();
+        for (Record record: buildRecords) {
+            DataBox columnValue;
+            if (!probeFirst)
+                columnValue = record.getValue(getLeftColumnIndex());
+            else
+                columnValue = record.getValue(getRightColumnIndex());
+            if(!map.containsKey(columnValue))
+                map.put(columnValue, new ArrayList<>());
+            map.get(columnValue).add(record);
+        }
+
+        for(Record record: probeRecords) {
+            DataBox columnValue;
+            if (probeFirst)
+                columnValue = record.getValue(getLeftColumnIndex());
+            else
+                columnValue = record.getValue(getRightColumnIndex());
+            if(!map.containsKey(columnValue))
+                continue;
+            for(Record probeRecord: map.get(columnValue)) {
+                Record joinedRecord = probeRecord.concat(record);
+                this.joinedRecords.add(joinedRecord);
+            }
+        }
     }
 
     /**
@@ -136,6 +183,10 @@ public class GHJOperator extends JoinOperator {
             // TODO(proj3_part1): implement the rest of grace hash join
             // If you meet the conditions to run the build and probe you should
             // do so immediately. Otherwise you should make a recursive call.
+            if(leftPartitions[i].getNumPages() > this.numBuffers - 2 && rightPartitions[i].getNumPages() > this.numBuffers - 2) {
+                run(leftPartitions[i], rightPartitions[i], pass + 1);
+            }else
+                buildAndProbe(leftPartitions[i], rightPartitions[i]);
         }
     }
 
@@ -202,6 +253,16 @@ public class GHJOperator extends JoinOperator {
         ArrayList<Record> rightRecords = new ArrayList<>();
 
         // TODO(proj3_part1): populate leftRecords and rightRecords such that
+        // B-1 buffers to do the partition
+        // each partition can not exceed B-2 buffers
+        // So with ((B-2) * (B-2) + 1) * 8  records, SHJ will fail
+        // In fact, due to the key skew, with fewer records, SHJ may also fail
+        for(int i = 0; i < 17 * 8; i++){
+            leftRecords.add(createRecord(i));
+        }
+        for(int i = 0; i < 10; i++){
+            rightRecords.add(createRecord(i));
+        }
         // SHJ breaks when trying to join them but not GHJ
         return new Pair<>(leftRecords, rightRecords);
     }
@@ -224,6 +285,16 @@ public class GHJOperator extends JoinOperator {
         ArrayList<Record> rightRecords = new ArrayList<>();
         // TODO(proj3_part1): populate leftRecords and rightRecords such that GHJ breaks
 
+        // help
+        // since all the records are equal, there is only one partition after no matter how many passes
+        // So with (B-2) * 8 + 1 = 33 records, GHJ will fail
+        // 分区中最多可以存放B-2个页不出错，若超过B-2页就会出错
+        // 如何保证B-2页都存在一个partition中，
+        // 即：其中的数据值一样，保证hash到一个partition下，那么不论如何分区，这些数据仍然会分到一个partition下
+        for(int i = 0; i < 33; i++){
+            leftRecords.add(createRecord(0));
+            rightRecords.add(createRecord(0));
+        }
         return new Pair<>(leftRecords, rightRecords);
     }
 }
