@@ -87,7 +87,15 @@ public class SortOperator extends QueryOperator {
      */
     public Run sortRun(Iterator<Record> records) {
         // TODO(proj3_part1): implement
-        return null;
+        //外部排序Pass0，数据页内部自排序
+        Run run = new Run(transaction, getSchema());
+        List<Record> list = new ArrayList<>();
+        while(records.hasNext()){
+            list.add(records.next());
+        }
+        list.sort(new RecordComparator());
+        run.addAll(list);
+        return run;
     }
 
     /**
@@ -108,7 +116,27 @@ public class SortOperator extends QueryOperator {
     public Run mergeSortedRuns(List<Run> runs) {
         assert (runs.size() <= this.numBuffers - 1);
         // TODO(proj3_part1): implement
-        return null;
+        // 合并所有的run
+        Run run = new Run(transaction, getSchema());
+        List<BacktrackingIterator<Record>> iters = new ArrayList<>();
+        for(Run r : runs){
+            iters.add(r.iterator());
+        }
+        PriorityQueue<Pair<Record, Integer>> prior = new PriorityQueue<>(new RecordPairComparator());
+        for(int i = 0; i < runs.size(); i++){
+            prior.add(new Pair<>(iters.get(i).next(), i));
+        }
+
+        while(!prior.isEmpty()){
+            Pair<Record, Integer> poll = prior.poll();
+            int index = poll.getSecond();
+            run.add(poll.getFirst());
+            if(iters.get(index).hasNext())
+                prior.add(new Pair<>(iters.get(index).next(), index));
+            else
+                continue;
+        }
+        return run;
     }
 
     /**
@@ -133,7 +161,14 @@ public class SortOperator extends QueryOperator {
      */
     public List<Run> mergePass(List<Run> runs) {
         // TODO(proj3_part1): implement
-        return Collections.emptyList();
+        // 合并M个，在这里M=buffer - 1
+        List<Run> newRuns = new ArrayList<>();
+        int n = numBuffers - 1;
+        for(int i = 0; i < runs.size(); i += n){
+            List<Run> runs1 = runs.subList(i, i + Math.min(n, runs.size() - i));
+            newRuns.add(mergeSortedRuns(runs1));
+        }
+        return newRuns;
     }
 
     /**
@@ -149,7 +184,15 @@ public class SortOperator extends QueryOperator {
         Iterator<Record> sourceIterator = getSource().iterator();
 
         // TODO(proj3_part1): implement
-        return makeRun(); // TODO(proj3_part1): replace this!
+        // 整个合并过程
+        List<Run> runList= new ArrayList<>();
+        while(sourceIterator.hasNext()){
+            runList.add(sortRun(getBlockIterator(sourceIterator, getSchema(), numBuffers)));
+        }
+        while(runList.size() > 1)
+            runList = mergePass(runList);
+
+        return runList.get(0);
     }
 
     /**
