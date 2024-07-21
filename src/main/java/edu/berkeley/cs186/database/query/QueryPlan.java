@@ -575,9 +575,24 @@ public class QueryPlan {
      */
     public QueryOperator minCostSingleAccess(String table) {
         QueryOperator minOp = new SequentialScanOperator(this.transaction, table);
-
+        QueryOperator res = minOp;
         // TODO(proj3_part2): implement
-        return minOp;
+        int SeqCost = minOp.estimateIOCost();
+        List<Integer> index = getEligibleIndexColumns(table);
+        int idx = -1;
+        for (int i = 0; i < index.size(); i++) {
+            SelectPredicate curr = selectPredicates.get(index.get(i));
+            try {
+                QueryOperator cur = new IndexScanOperator(transaction, table, curr.column, curr.operator, curr.value);
+                if(cur.estimateIOCost() <= SeqCost) {
+                    res = cur;
+                    idx = i;
+                }
+            } catch (RuntimeException err) {
+                /* do nothing */
+            }
+        }
+        return addEligibleSelections(res, idx);
     }
 
     // Task 6: Join Selection //////////////////////////////////////////////////
@@ -687,6 +702,7 @@ public class QueryPlan {
         // Pass 1: For each table, find the lowest cost QueryOperator to access
         // the table. Construct a mapping of each table name to its lowest cost
         // operator.
+
         //
         // Pass i: On each pass, use the results from the previous pass to find
         // the lowest cost joins with each table from pass 1. Repeat until all
