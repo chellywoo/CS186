@@ -22,8 +22,18 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-
-        return false;
+        if(a == LockType.NL || b == LockType.NL)
+            return true;
+        if(a == LockType.X || b == LockType.X)
+            return false;
+        if(a == LockType.IS || b == LockType.IS)
+            return true;
+        if(a == LockType.SIX || b == LockType.SIX)
+            return false;
+        if((a == LockType.IX && b == LockType.IX) || (a == LockType.S && b == LockType.S))
+            return true;
+        else
+            return false;
     }
 
     /**
@@ -35,13 +45,13 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         switch (a) {
-        case S: return IS;
-        case X: return IX;
-        case IS: return IS;
-        case IX: return IX;
-        case SIX: return IX;
-        case NL: return NL;
-        default: throw new UnsupportedOperationException("bad lock type");
+            case S: return IS;
+            case X: return IX;
+            case IS: return IS;
+            case IX: return IX;
+            case SIX: return IX;
+            case NL: return NL;
+            default: throw new UnsupportedOperationException("bad lock type");
         }
     }
 
@@ -54,7 +64,14 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-
+        if(parentLockType == LockType.NL)
+            return childLockType == LockType.NL;
+        if(childLockType == LockType.NL)
+            return true;
+        if(parentLockType == LockType.IX)
+            return true;
+        if(parentLockType == LockType.IS)
+            return childLockType == LockType.IS || childLockType == LockType.S;
         return false;
     }
 
@@ -69,8 +86,15 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-
-        return false;
+        if(substitute == LockType.NL)
+            return required == LockType.NL;
+        if(required == LockType.X)
+            return substitute == LockType.X;
+        if(substitute == LockType.IS)
+            return required == LockType.IS;
+        if(substitute == LockType.IX)
+            return required != LockType.S;
+        return true;
     }
 
     /**
