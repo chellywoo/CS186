@@ -154,7 +154,6 @@ public class LockManager {
          */
         public LockType getTransactionLockType(long transaction) {
             // TODO(proj4_part1): implement
-            ResourceName resourceName = null;
             for(Lock lock : locks) {
                 if(lock.transactionNum.equals(transaction)) {
                     return lock.lockType;
