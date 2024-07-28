@@ -2,6 +2,9 @@ package edu.berkeley.cs186.database.concurrency;
 
 import edu.berkeley.cs186.database.TransactionContext;
 
+import java.util.List;
+import java.util.Stack;
+
 /**
  * LockUtil is a declarative layer which simplifies multigranularity lock
  * acquisition for the user (you, in the last task of Part 2). Generally
@@ -38,12 +41,97 @@ public class LockUtil {
 
         // You may find these variables useful
         LockContext parentContext = lockContext.parentContext();
+        // 获取显式锁、隐式锁
         LockType effectiveLockType = lockContext.getEffectiveLockType(transaction);
+        // 获取当前事务的锁
         LockType explicitLockType = lockContext.getExplicitLockType(transaction);
 
         // TODO(proj4_part2): implement
+        /**
+         * 判断当前事务是否需要对上层进行授予锁等操作
+         */
+        // 1. 若当前是数据库的事务，那就只需要判断是否已经上锁，但在测例里并没有看到直接调用数据库上锁
+        if(parentContext == null) {
+            if (explicitLockType == LockType.NL)
+                 lockContext.acquire(transaction, requestType);
+            else if(LockType.substitutable(effectiveLockType, requestType))
+                lockContext.promote(transaction, requestType);
+            return;
+        }
+        // 2. 若不是数据库的上下文，是表或者页的，需要先得到上层上下文进行判断
+        Stack<LockContext> stack = ensureSufficient(lockContext);
+        // 2.1 如果当前请求的锁是NL类型，那么就直接授予，因为在lockcontext中有检查如果授予的是NL的话，就会将上层lockcontext中的锁释放，这里不需要进行二次判断了
+        if(requestType == LockType.NL) {
+//            while(!stack.isEmpty()) {
+//                if(stack.peek().getEffectiveLockType(transaction) != LockType.NL)
+//                   stack.pop().release(transaction);
+//                else
+//                    return;
+//            }
+            lockContext.acquire(transaction, requestType);
+            return;
+        }
+        // 2.2 如果当前请求的锁不是NL类型，需要做判断，查看上层祖先的锁是什么样子的
+        // 2.2.1 如果当前事务没有锁，对数据进行判断，需要授予上层数据库什么锁
+        if(explicitLockType.equals(LockType.NL)) {
+            while(!stack.isEmpty()) {
+                LockContext current = stack.pop();
+                LockType type = current.getExplicitLockType(transaction);
+                if(type.equals(explicitLockType))// 若父锁也为空，直接授予锁
+                    current.acquire(transaction, LockType.parentLock(requestType));
+                else if(!LockType.canBeParentLock(type, requestType)){
+//                    current.release(transaction);
+                    // 若父锁不为空，并且不可以作为子锁的父锁，但是可以进行升级
+                    if(LockType.substitutable(LockType.parentLock(requestType), type))
+                        current.promote(transaction, LockType.parentLock(requestType));
+                    else
+                        current.promote(transaction, requestType);
+                }
+            }
+            lockContext.acquire(transaction, requestType);
+            return;
+        }
+//        // 若原来的锁是意向锁
+        if(explicitLockType.isIntent() && explicitLockType == LockType.parentLock(requestType)) {
+//            lockContext.release(transaction);
+            lockContext.escalate(transaction);
+            return;
+        }
+        // 考虑当前锁是IX的情况，如果申请的锁是X时，需要授予SIX锁
+        if(explicitLockType.equals(LockType.IX) && requestType.equals(LockType.S)){
+            lockContext.acquire(transaction, LockType.SIX);
+            return;
+        }
+        // 当前锁可以被原来的锁升级
+        if(LockType.substitutable(requestType, explicitLockType)) {
+            while(!stack.isEmpty())
+                stack.pop().promote(transaction, LockType.parentLock(requestType));
+//            while(!stack.isEmpty()) {
+//                LockContext current = stack.pop();
+//                LockType type = current.getExplicitLockType(transaction);
+//                if(type.equals(explicitLockType))
+//                    current.promote(transaction, requestType);
+//                else if(!LockType.substitutable(type, requestType)){
+//                    current.release(transaction);
+//                    current.acquire(transaction, requestType);
+//                }
+//            }
+            lockContext.promote(transaction, requestType);
+            return;
+        }
+
         return;
     }
 
     // TODO(proj4_part2) add any helper methods you want
+    // 确保您对所有祖先都有适当的锁
+    public static Stack<LockContext> ensureSufficient(LockContext lockContext) {
+        Stack<LockContext> stack = new Stack<>();
+        LockContext parent = lockContext;
+        while(parent.parentContext() != null) {
+            parent = parent.parentContext();
+            stack.push(parent);
+        }
+        return stack;
+    }
 }
