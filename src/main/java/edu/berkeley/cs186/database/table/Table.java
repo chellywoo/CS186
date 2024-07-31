@@ -1,6 +1,7 @@
 package edu.berkeley.cs186.database.table;
 
 import edu.berkeley.cs186.database.DatabaseException;
+import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.Bits;
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterable;
@@ -310,7 +311,7 @@ public class Table implements BacktrackingIterable<Record> {
         // its on.
         LockContext pageContext = tableContext.childContext(rid.getPageNum());
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(pageContext, LockType.X);
 
         Record newRecord = schema.verify(updated);
         Record oldRecord = getRecord(rid);
@@ -337,7 +338,7 @@ public class Table implements BacktrackingIterable<Record> {
         LockContext pageContext = tableContext.childContext(rid.getPageNum());
 
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(pageContext, LockType.X);
 
         Page page = fetchPage(rid.getPageNum());
         try {
@@ -406,7 +407,7 @@ public class Table implements BacktrackingIterable<Record> {
      */
     public BacktrackingIterator<RecordId> ridIterator() {
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(tableContext, LockType.NL);
+//        LockUtil.ensureSufficientLockHeld(tableContext, LockType.S);
 
         BacktrackingIterator<Page> iter = pageDirectory.iterator();
         return new ConcatBacktrackingIterator<>(new PageIterator(iter, false));
@@ -420,7 +421,7 @@ public class Table implements BacktrackingIterable<Record> {
      */
     public BacktrackingIterator<Record> recordIterator(Iterator<RecordId> rids) {
         // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(tableContext, LockType.NL);
+//        LockUtil.ensureSufficientLockHeld(tableContext, LockType.S);
         return new RecordIterator(rids);
     }
 

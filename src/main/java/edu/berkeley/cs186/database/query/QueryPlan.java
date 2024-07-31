@@ -738,8 +738,8 @@ public class QueryPlan {
         // Pass i: On each pass, use the results from the previous pass to find
         // the lowest cost joins with each table from pass 1. Repeat until all
         // tables have been joined.
-        Map<Set<String>, QueryOperator> map1 = minCostJoins(map, map);
-        for(int i = 2; i < tableNames.size(); i++)
+        Map<Set<String>, QueryOperator> map1 = map;
+        for(int i = 2; i <= tableNames.size(); i++)
                 map1 = minCostJoins(map1, map);
         QueryOperator q = minCostOperator(map1);
         this.finalOperator = q;

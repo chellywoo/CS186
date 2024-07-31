@@ -241,7 +241,7 @@ public class LockManager {
                 shouldBlock = true;
                 transaction.prepareBlock();
                 LockRequest request = new LockRequest(transaction, lock);
-                resourceEntry.waitingQueue.addFirst(request);
+                resourceEntry.addToQueue(request, true);
             }
             // 若兼容，上锁，将事务上所有该释放的资源释放掉
             if(!shouldBlock){
@@ -302,7 +302,7 @@ public class LockManager {
                 shouldBlock = true;
                 transaction.prepareBlock();
                 LockRequest request = new LockRequest(transaction, lock);
-                resourceEntry.waitingQueue.addLast(request);
+                resourceEntry.addToQueue(request, false);
             } else{
                 // 上锁
                 resourceEntry.grantOrUpdateLock(lock);

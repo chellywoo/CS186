@@ -86,15 +86,15 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-        if(substitute == LockType.NL)
-            return required == LockType.NL;
-        if(required == LockType.X)
-            return substitute == LockType.X;
-        if(substitute == LockType.IS)
-            return required == LockType.IS;
-        if(substitute == LockType.IX)
-            return required != LockType.S;
-        return true;
+        switch (substitute) {
+            case NL: return required == NL;
+            case IS: return required == NL || required == IS;
+            case IX: return required == NL || required == IS || required == IX;
+            case S : return required == NL || required == IS || required == S;
+            case SIX : return !(required == X);
+            case X : return true;
+            default: throw new UnsupportedOperationException("bad lock type");
+        }
     }
 
     /**
