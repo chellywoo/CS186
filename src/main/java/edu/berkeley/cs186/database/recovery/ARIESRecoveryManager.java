@@ -3,10 +3,12 @@ package edu.berkeley.cs186.database.recovery;
 import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.DummyLockContext;
+import edu.berkeley.cs186.database.concurrency.LockType;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.recovery.records.*;
+import edu.berkeley.cs186.database.table.Record;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -191,21 +193,26 @@ public class ARIESRecoveryManager implements RecoveryManager {
         // back from the next record that hasn't yet been undone.
         long currentLSN = lastRecord.getUndoNextLSN().orElse(lastRecordLSN);
         // TODO(proj5) implement the rollback logic described above
+        if(lastRecord.type.equals(LogType.UNDO_UPDATE_PAGE) || lastRecord.type.equals(LogType.UNDO_ALLOC_PAGE) || lastRecord.type.equals(LogType.UNDO_ALLOC_PART) || lastRecord.type.equals(LogType.UNDO_FREE_PAGE) || lastRecord.type.equals(LogType.UNDO_FREE_PART))
+            return;
         LogRecord currentRecord = logManager.fetchLogRecord(currentLSN);
-        long lastLSN = currentLSN;
-        long rollbackLSN = currentRecord.getPrevLSN().get();
-        while(rollbackLSN > 0) {
+        long min = 0;
+        if(lastRecordLSN == LSN)
+            min = 0;
+        else
+            min =LSN;
+        long rollbackLSN = lastRecordLSN;
+        while(rollbackLSN > min) {
             // 判断是否可以undo
-            currentRecord = logManager.fetchLogRecord(rollbackLSN);
             if (currentRecord.isUndoable()) {
                 // 对记录调用undo来获取补偿日志记录（CLR）
                 LogRecord clr = currentRecord.undo(currentLSN);
                 logManager.appendToLog(clr);
                 clr.redo(this, diskSpaceManager, bufferManager);
-                lastLSN = currentLSN;
                 currentLSN = clr.getLSN();
             }
             rollbackLSN = currentRecord.getPrevLSN().get();
+            currentRecord = logManager.fetchLogRecord(rollbackLSN);
         }
 //        Math.max(lastLSN, logManager.maxLSN(logManager.getLSNPage(lastLSN)))
         flushToLSN(logManager.getFlushedLSN());
@@ -259,7 +266,18 @@ public class ARIESRecoveryManager implements RecoveryManager {
         assert (before.length == after.length);
         assert (before.length <= BufferManager.EFFECTIVE_PAGE_SIZE / 2);
         // TODO(proj5): implement
-        return -1L;
+        // 增加日志记录，并相应地更新事务表和脏页表
+        TransactionTableEntry transactionEntry = transactionTable.get(transNum);
+        assert (transactionEntry != null);
+
+        long prevLSN = transactionEntry.lastLSN;
+        LogRecord record = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, after);
+        long LSN = logManager.appendToLog(record);
+        // Update lastLSN
+        transactionEntry.lastLSN = LSN;
+        dirtyPage(pageNum, LSN);
+//        flushToLSN(LSN - 1);
+        return LSN;
     }
 
     /**
@@ -435,6 +453,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
         long savepointLSN = transactionEntry.getSavepoint(name);
 
         // TODO(proj5): implement
+        rollbackToLSN(transNum, savepointLSN);
         return;
     }
 
