@@ -481,7 +481,27 @@ public class ARIESRecoveryManager implements RecoveryManager {
         Map<Long, Pair<Transaction.Status, Long>> chkptTxnTable = new HashMap<>();
 
         // TODO(proj5): generate end checkpoint record(s) for DPT and transaction table
+        // 循环访问DPT并复制条目，如果当前记录过多，生成一个检查点，追加记录到日志中
+        for(Map.Entry<Long, Long> entry : dirtyPageTable.entrySet()){
+            if(!EndCheckpointLogRecord.fitsInOneRecord(chkptDPT.size() + 1, 0)) {
+                LogRecord endRecord = new EndCheckpointLogRecord(chkptDPT, chkptTxnTable);
+                logManager.appendToLog(endRecord);
+                chkptDPT = new HashMap<>();
+            }
+            chkptDPT.put(entry.getKey(), entry.getValue());
+        }
 
+        // 遍历事务表，复制status以及lastLSN，尽在需要时输出检查点记录
+        for (Map.Entry<Long, TransactionTableEntry> entry : transactionTable.entrySet()) {
+            if (!EndCheckpointLogRecord.fitsInOneRecord(chkptDPT.size(), chkptTxnTable.size() + 1)) {
+                LogRecord endRecord = new EndCheckpointLogRecord(chkptDPT, chkptTxnTable);
+                logManager.appendToLog(endRecord);
+                chkptTxnTable = new HashMap<>();
+                if (!chkptDPT.isEmpty())
+                    chkptDPT = new HashMap<>();
+            }
+            chkptTxnTable.put(entry.getKey(), new Pair<>(entry.getValue().transaction.getStatus(), entry.getValue().lastLSN));
+        }
         // Last end checkpoint record
         LogRecord endRecord = new EndCheckpointLogRecord(chkptDPT, chkptTxnTable);
         logManager.appendToLog(endRecord);
